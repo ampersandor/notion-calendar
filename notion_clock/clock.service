@@ -1,0 +1,18 @@
+[Unit]
+Description=Notion Clock
+Wants=graphical.target
+After=graphical.target
+
+[Service]
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+Environment=RUST_BACKTRACE=1
+Environment=RUST_LOG=debug
+Type=simple
+ExecStart=/bin/bash /home/pi/notion_clock/kiosk.sh
+Restart=always
+User=pi
+Group=pi
+
+[Install]
+WantedBy=graphical.target 
