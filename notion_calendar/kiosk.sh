@@ -16,7 +16,7 @@ unclutter -idle 0.1 -root &
 openbox &
 
 # Build calendar if needed
-cd /home/pi/notion_calendar
+cd /home/pi/notion-calendar/notion_calendar
 cargo build --release
 
 # Start calendar program

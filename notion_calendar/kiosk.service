@@ -7,7 +7,7 @@ After=graphical.target network.target
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/pi/.Xauthority
 Type=simple
-ExecStart=/bin/bash /home/pi/notion_calendar/kiosk.sh
+ExecStart=/bin/bash /home/pi/kiosk/kiosk.sh
 Restart=on-abort
 User=pi
 Group=pi
