@@ -3,17 +3,7 @@ use plotters::prelude::*;
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
-use crossterm::{
-    execute,
-    terminal::{Clear, ClearType},
-    cursor::{MoveTo, Hide},
-    style::{Color, SetForegroundColor},
-};
 
-struct Event {
-    date: NaiveDate,
-    description: String,
-}
 
 struct Holiday {
     date: NaiveDate,
