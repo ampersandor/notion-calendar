@@ -1,47 +1,85 @@
 use chrono::{Datelike, Local, NaiveDate, Weekday};
-use plotters::prelude::*;
+use image::{ImageBuffer, Rgb, RgbImage};
+use rusttype::{point, Font, Point, Scale};
 use std::error::Error;
-use std::thread;
-use std::time::Duration;
-use plotters_backend::FontFamily;
-
 
 struct Holiday {
     date: NaiveDate,
     name: String,
 }
 
-fn is_holiday(date: NaiveDate, holidays: &[Holiday]) -> Option<&str> {
-    holidays.iter()
-        .find(|h| h.date == date)
-        .map(|h| h.name.as_str())
+fn draw_text(
+    image: &mut RgbImage,
+    font: &Font,
+    text: &str,
+    x: i32,
+    y: i32,
+    size: f32,
+    color: Rgb<u8>,
+) {
+    let scale = Scale::uniform(size);
+    let v_metrics = font.v_metrics(scale);
+    let offset = point(x as f32, y as f32 + v_metrics.ascent);
+
+    // 텍스트를 이미지에 그리기
+    for glyph in font.layout(text, scale, offset) {
+        if let Some(bounding_box) = glyph.pixel_bounding_box() {
+            glyph.draw(|x, y, v| {
+                let x = x as i32 + bounding_box.min.x;
+                let y = y as i32 + bounding_box.min.y;
+                
+                if x >= 0 && x < image.width() as i32 && y >= 0 && y < image.height() as i32 {
+                    let pixel = image.get_pixel_mut(x as u32, y as u32);
+                    *pixel = Rgb([
+                        ((1.0 - v) * pixel[0] as f32 + v * color[0] as f32) as u8,
+                        ((1.0 - v) * pixel[1] as f32 + v * color[1] as f32) as u8,
+                        ((1.0 - v) * pixel[2] as f32 + v * color[2] as f32) as u8,
+                    ]);
+                }
+            });
+        }
+    }
 }
 
-fn create_gradient_background(root: &DrawingArea<BitMapBackend, plotters::coord::Shift>) -> Result<(), Box<dyn Error>> {
-    let width = 1920;
-    let height = 1080;
-    let steps = 1080;
+fn main() -> Result<(), Box<dyn Error>> {
+    // 1920x1080 검은 배경의 이미지 생성
+    let mut img = ImageBuffer::new(1920, 1080);
+    
+    // 폰트 로드
+    let font_data = include_bytes!("../assets/BinggraeSamanco.otf");
+    let font = Font::try_from_vec(font_data.to_vec())
+        .ok_or("Error loading font")?;
 
-    for y in 0..steps {
-        let y_pos = (y * height) / steps;
-        let y_next = ((y + 1) * height) / steps;
-        
-        let alpha = y as f64 / steps as f64;
+    // 그라데이션 배경 생성
+    for y in 0..1080 {
+        let alpha = y as f64 / 1080.0;
         let r = (28.0 * (1.0 - alpha) + 18.0 * alpha) as u8;
         let g = (31.0 * (1.0 - alpha) + 18.0 * alpha) as u8;
         let b = (51.0 * (1.0 - alpha) + 26.0 * alpha) as u8;
-
-        root.draw(&Rectangle::new(
-            [(0, y_pos), (width, y_next)],
-            Into::<ShapeStyle>::into(&RGBColor(r, g, b)).filled(),
-        ))?;
+        
+        for x in 0..1920 {
+            img.put_pixel(x, y, Rgb([r, g, b]));
+        }
     }
-    Ok(())
-}
 
-fn draw_calendar() -> Result<(), Box<dyn Error>> {
+    // 배경 생성 후...
     let today = Local::now().date_naive();
-    
+    let title = format!("{}년 {:02}월 {:02}일!", today.year(), today.month(), today.day());
+    draw_text(&mut img, &font, &title, 60, 60, 72.0, Rgb([135, 206, 235]));
+
+    // 제목 그린 후...
+    let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    for (i, day) in weekdays.iter().enumerate() {
+        let x = 60 + (i as i32 * 258);  // 258은 셀 너비
+        let color = match i {
+            0 => Rgb([255, 99, 99]),    // 일요일은 빨간색
+            6 => Rgb([99, 149, 255]),   // 토요일은 파란색
+            _ => Rgb([200, 200, 200]),  // 평일은 회색
+        };
+        draw_text(&mut img, &font, day, x + 15, 150, 36.0, color);
+    }
+
+    // Holiday 데이터 추가
     let holidays = vec![
         Holiday {
             date: NaiveDate::from_ymd_opt(2024, 2, 9).unwrap(),
@@ -57,35 +95,8 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
         },
     ];
 
-    let root = BitMapBackend::new("calendar.png", (1920, 1080)).into_drawing_area();
-    create_gradient_background(&root)?;
-
-    let title = format!("📅 {}.{:02}", today.year(), today.month());
-    let font_title = FontDesc::new(FontFamily::Name("SAEEUM"), 72.0, FontStyle::Normal);
-    println!("font_title: {}", font_title.get_family().as_str());
-    root.draw_text(&title, &font_title.color(&RGBColor(135, 206, 235)), (60, 60))?;
-
-    let cell_width = 258;
-    let cell_height = 160;
-    let grid_start_x = 60;
-    let grid_start_y = 200;
-    let day_font = FontDesc::new(FontFamily::Name("SAEEUM"), 36.0, FontStyle::Normal);
-
-    let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    for (i, day) in weekdays.iter().enumerate() {
-        let x = grid_start_x + (i as i32 * cell_width);
-        let color = match i {
-            0 => RGBColor(255, 99, 99),    // 일요일은 연한 빨간색
-            6 => RGBColor(99, 149, 255),   // 토요일은 연한 파란색
-            _ => RGBColor(200, 200, 200),  // 평일은 밝은 회색
-        };
-        root.draw_text(
-            day,
-            &day_font.color(&color),
-            (x + 15, grid_start_y - 50),
-        )?;
-    }
-
+    // 요일 그린 후...
+    let today = Local::now().date_naive();
     let first_day = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap();
     let last_day = if today.month() == 12 {
         NaiveDate::from_ymd_opt(today.year() + 1, 1, 1).unwrap()
@@ -97,66 +108,56 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
     let mut week = 0;
     let first_weekday = first_day.weekday().num_days_from_sunday() as i32;
 
+    // 날짜 그리기
     while current_date <= last_day {
-        let day_pos_x: i32 = grid_start_x + ((first_weekday + (current_date.day() - 1) as i32) % 7 * cell_width);
-        let day_pos_y: i32 = grid_start_y + (week * cell_height);
+        let day_pos_x = 60 + ((first_weekday + (current_date.day() - 1) as i32) % 7 * 258);
+        let day_pos_y = 200 + (week * 160);  // 160은 셀 높이
 
-        root.draw(&Rectangle::new(
-            [(day_pos_x + 1, day_pos_y + cell_height), (day_pos_x + cell_width + 1, day_pos_y + cell_height + 2)],
-            Into::<ShapeStyle>::into(&RGBColor(40, 40, 40)).filled(),
-        ))?;
-        root.draw(&Rectangle::new(
-            [(day_pos_x + cell_width, day_pos_y + 1), (day_pos_x + cell_width + 2, day_pos_y + cell_height + 1)],
-            Into::<ShapeStyle>::into(&RGBColor(40, 40, 40)).filled(),
-        ))?;
-
-        root.draw(&Rectangle::new(
-            [(day_pos_x, day_pos_y), (day_pos_x + cell_width, day_pos_y + cell_height)],
-            Into::<ShapeStyle>::into(&RGBColor(90, 90, 90)).stroke_width(1),
-        ))?;
-
-        root.draw(&Rectangle::new(
-            [(day_pos_x, day_pos_y), (day_pos_x + cell_width, day_pos_y + 1)],
-            Into::<ShapeStyle>::into(&RGBColor(100, 100, 100)).filled(),
-        ))?;
-        root.draw(&Rectangle::new(
-            [(day_pos_x, day_pos_y), (day_pos_x + 1, day_pos_y + cell_height)],
-            Into::<ShapeStyle>::into(&RGBColor(100, 100, 100)).filled(),
-        ))?;
-
-        let holiday_name = is_holiday(current_date, &holidays);
-        let is_today = current_date == today;
-
-        if is_today {
-            root.draw(&Rectangle::new(
-                [(day_pos_x + 2, day_pos_y + 2), (day_pos_x + cell_width - 2, day_pos_y + cell_height - 2)],
-                Into::<ShapeStyle>::into(&RGBColor(70, 40, 60)).filled(),
-            ))?;
+        // 오늘 날짜 배경색 추가
+        if current_date == today {
+            for x in 1..257 {
+                for y in 1..159 {
+                    img.put_pixel(
+                        (day_pos_x + x) as u32,
+                        (day_pos_y + y) as u32,
+                        Rgb([70, 40, 60])  // 어두운 보라색 배경
+                    );
+                }
+            }
         }
 
-        let date_color = if is_today {
-            RGBColor(255, 182, 193)
-        } else if holiday_name.is_some() || current_date.weekday() == Weekday::Sun {
-            RGBColor(255, 99, 99)
+        // 테두리 그리기 (회색)
+        for x in 0..258 {
+            for y in 0..160 {
+                if x == 0 || x == 257 || y == 0 || y == 159 {
+                    img.put_pixel(
+                        (day_pos_x + x) as u32,
+                        (day_pos_y + y) as u32,
+                        Rgb([90, 90, 90])
+                    );
+                }
+            }
+        }
+
+        // 날짜 색상 설정
+        let color = if current_date == today {
+            Rgb([255, 182, 193])  // 오늘 날짜는 분홍색
+        } else if current_date.weekday() == Weekday::Sun {
+            Rgb([255, 99, 99])    // 일요일은 빨간색
         } else if current_date.weekday() == Weekday::Sat {
-            RGBColor(99, 149, 255)
+            Rgb([99, 149, 255])   // 토요일은 파란색
         } else {
-            RGBColor(200, 200, 200)
+            Rgb([200, 200, 200])  // 평일은 회색
         };
 
-        root.draw_text(
-            &current_date.day().to_string(),
-            &day_font.color(&date_color),
-            (day_pos_x + 10, day_pos_y + 10),
-        )?;
+        // 날짜 그리기
+        draw_text(&mut img, &font, &current_date.day().to_string(),
+            day_pos_x + 10, day_pos_y + 10, 36.0, color);
 
-        if let Some(holiday) = holiday_name {
-            let holiday_font = FontDesc::new(FontFamily::Name("SAEEUM"), 24.0, FontStyle::Normal);
-            root.draw_text(
-                holiday,
-                &holiday_font.color(&RGBColor(255, 99, 99)),
-                (day_pos_x + 20, day_pos_y + 70),
-            )?;
+        // 공휴일 표시 추가
+        if let Some(holiday) = holidays.iter().find(|h| h.date == current_date) {
+            draw_text(&mut img, &font, &holiday.name,
+                day_pos_x + 20, day_pos_y + 70, 24.0, Rgb([255, 99, 99]));
         }
 
         if (current_date.day() as i32 + first_weekday) % 7 == 0 {
@@ -165,28 +166,8 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
         current_date = current_date.succ_opt().unwrap();
     }
 
-    root.present()?;
-    println!("✅ calendar.png 생성 완료! ({})", Local::now().format("%Y-%m-%d %H:%M:%S"));
+    // 이미지 저장
+    img.save("calendar.png")?;
+    println!("✅ calendar.png 생성 완료!");
     Ok(())
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
-    // assets 디렉토리에서 폰트 로드
-    let font_data = include_bytes!("../assets/SAEEUM.otf");
-    
-    match plotters::style::register_font("SAEEUM", FontStyle::Normal, font_data) {
-        Ok(_) => println!("✅ SAEEUM 폰트 등록 성공"),
-        Err(_) => {
-            println!("❌ SAEEUM 폰트 등록 실패");
-            // 폰트 등록 실패 시 기본 폰트 사용
-            return Err("폰트 등록 실패".into());
-        }
-    }
-    
-    loop {
-        if let Err(e) = draw_calendar() {
-            eprintln!("캘린더 업데이트 중 오류 발생: {}", e);
-        }
-        thread::sleep(Duration::from_secs(600));
-    }
 }
