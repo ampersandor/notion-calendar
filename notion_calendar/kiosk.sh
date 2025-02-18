@@ -3,6 +3,12 @@
 export DISPLAY=:0
 export XAUTHORITY=/home/pi/.Xauthority
 
+# Install sxiv if not already installed
+if ! command -v sxiv &> /dev/null; then
+    sudo apt-get update
+    sudo apt-get install -y sxiv
+fi
+
 # Wait for X server and services to start
 sleep 8
 
@@ -26,13 +32,5 @@ cd /home/pi/notion-calendar/notion_calendar
 # Wait for the first image to be generated
 sleep 5
 
-# Display and refresh image
-while true; do
-    if [ -f "calendar.png" ]; then
-        feh --hide-pointer --fullscreen calendar.png
-        sleep 600  # 10분 대기
-        killall feh  # 기존 feh 프로세스 종료
-    else
-        sleep 1
-    fi
-done
+# Display image with auto-reload
+feh --hide-pointer --fullscreen --scale-down --zoom fill --reload 600 calendar.png
