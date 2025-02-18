@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-plotters = "0.3"
+plotters = { version = "0.3", features = ["ab_glyph"] }
+plotters-backend = "0.3"
 chrono = "0.4"
 crossterm = "0.26.1"
+
+[build]
+# assets 디렉토리를 빌드 시 포함
+include = ["assets/*"]

@@ -3,6 +3,7 @@ use plotters::prelude::*;
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
+use plotters_backend::FontFamily;
 
 
 struct Holiday {
@@ -59,17 +60,18 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
     let root = BitMapBackend::new("calendar.png", (1920, 1080)).into_drawing_area();
     create_gradient_background(&root)?;
 
-    let title = format!("📅 {} 년 {} 월", today.year(), today.month());
-    let font_title = FontDesc::new(FontFamily::SansSerif, 72.0, FontStyle::Normal);
-    root.draw_text(&title, &font_title.color(&RGBColor(135, 206, 235)), (200, 60))?;
+    let title = format!("📅 {}.{:02}", today.year(), today.month());
+    let font_title = FontDesc::new(FontFamily::Name("SAEEUM"), 72.0, FontStyle::Normal);
+    println!("font_title: {}", font_title.get_family().as_str());
+    root.draw_text(&title, &font_title.color(&RGBColor(135, 206, 235)), (60, 60))?;
 
-    let cell_width = 240;
+    let cell_width = 258;
     let cell_height = 160;
-    let grid_start_x = 120;
+    let grid_start_x = 60;
     let grid_start_y = 200;
-    let day_font = FontDesc::new(FontFamily::SansSerif, 36.0, FontStyle::Normal);
+    let day_font = FontDesc::new(FontFamily::Name("SAEEUM"), 36.0, FontStyle::Normal);
 
-    let weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+    let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (i, day) in weekdays.iter().enumerate() {
         let x = grid_start_x + (i as i32 * cell_width);
         let color = match i {
@@ -80,7 +82,7 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
         root.draw_text(
             day,
             &day_font.color(&color),
-            (x + 35, grid_start_y - 30),
+            (x + 15, grid_start_y - 50),
         )?;
     }
 
@@ -96,8 +98,8 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
     let first_weekday = first_day.weekday().num_days_from_sunday() as i32;
 
     while current_date <= last_day {
-        let day_pos_x = grid_start_x + ((first_weekday + (current_date.day() - 1) as i32) % 7 * cell_width);
-        let day_pos_y = grid_start_y + (week * cell_height);
+        let day_pos_x: i32 = grid_start_x + ((first_weekday + (current_date.day() - 1) as i32) % 7 * cell_width);
+        let day_pos_y: i32 = grid_start_y + (week * cell_height);
 
         root.draw(&Rectangle::new(
             [(day_pos_x + 1, day_pos_y + cell_height), (day_pos_x + cell_width + 1, day_pos_y + cell_height + 2)],
@@ -149,7 +151,7 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
         )?;
 
         if let Some(holiday) = holiday_name {
-            let holiday_font = FontDesc::new(FontFamily::SansSerif, 24.0, FontStyle::Normal);
+            let holiday_font = FontDesc::new(FontFamily::Name("SAEEUM"), 24.0, FontStyle::Normal);
             root.draw_text(
                 holiday,
                 &holiday_font.color(&RGBColor(255, 99, 99)),
@@ -169,6 +171,18 @@ fn draw_calendar() -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // assets 디렉토리에서 폰트 로드
+    let font_data = include_bytes!("../assets/SAEEUM.otf");
+    
+    match plotters::style::register_font("SAEEUM", FontStyle::Normal, font_data) {
+        Ok(_) => println!("✅ SAEEUM 폰트 등록 성공"),
+        Err(_) => {
+            println!("❌ SAEEUM 폰트 등록 실패");
+            // 폰트 등록 실패 시 기본 폰트 사용
+            return Err("폰트 등록 실패".into());
+        }
+    }
+    
     loop {
         if let Err(e) = draw_calendar() {
             eprintln!("캘린더 업데이트 중 오류 발생: {}", e);
