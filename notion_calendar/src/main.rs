@@ -1,6 +1,6 @@
-use chrono::{Datelike, Local, NaiveDate, Timelike, Weekday};
+use chrono::{Datelike, Local, NaiveDate, Timelike, Weekday, FixedOffset};
 use image::{ImageBuffer, Rgb, RgbImage};
-use rusttype::{point, Font, Point, Scale};
+use rusttype::{point, Font, Scale};
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
@@ -218,6 +218,16 @@ fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
         current_date = current_date.succ_opt().unwrap();
     }
 
+    // 한국 시간대 설정 (UTC+9)
+    let kst = FixedOffset::east_opt(9 * 3600).unwrap();
+    let now = Local::now().with_timezone(&kst);
+    
+    // 마지막 업데이트 시간 표시
+    let update_time = format!("updated: {}", now.format("%Y-%m-%d %H:%M:%S"));
+    draw_text(&mut img, &font, &update_time, 
+        1920 - 280, 1080 - 60, 24.0,
+        Rgb([colors.text_normal[0], colors.text_normal[1], colors.text_normal[2]]));
+
     // 이미지 저장
     img.save("calendar.png")?;
     println!("✅ calendar.png 생성 완료! ({})", Local::now().format("%Y-%m-%d %H:%M:%S"));
@@ -226,11 +236,15 @@ fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     loop {
-        let hour = Local::now().hour();
+        // 한국 시간 기준으로 테마 변경
+        let kst = FixedOffset::east_opt(9 * 3600).unwrap();
+        let now = Local::now().with_timezone(&kst);
+        let hour = now.hour();
+        
         let theme = if hour >= 6 && hour < 18 {
             Theme::Light  // 오전 6시 ~ 오후 6시는 라이트 모드
         } else {
-            Theme::Light   // 그 외 시간은 다크 모드
+            Theme::Dark   // 그 외 시간은 다크 모드
         };
 
         if let Err(e) = draw_calendar(theme) {
