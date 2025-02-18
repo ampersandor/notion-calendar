@@ -1,11 +1,63 @@
-use chrono::{Datelike, Local, NaiveDate, Weekday};
+use chrono::{Datelike, Local, NaiveDate, Timelike, Weekday};
 use image::{ImageBuffer, Rgb, RgbImage};
 use rusttype::{point, Font, Point, Scale};
 use std::error::Error;
+use std::thread;
+use std::time::Duration;
 
 struct Holiday {
     date: NaiveDate,
     name: String,
+}
+
+#[derive(Clone, Copy)]
+enum Theme {
+    Dark,
+    Light,
+}
+
+struct ThemeColors {
+    background_start: [u8; 3],
+    background_end: [u8; 3],
+    title: [u8; 3],
+    border: [u8; 3],
+    today_bg: [u8; 3],
+    text_normal: [u8; 3],
+    text_sunday: [u8; 3],
+    text_saturday: [u8; 3],
+    text_today: [u8; 3],
+    text_holiday: [u8; 3],
+}
+
+impl Theme {
+    fn colors(&self) -> ThemeColors {
+        match self {
+            Theme::Dark => ThemeColors {
+                background_start: [28, 31, 51],
+                background_end: [18, 18, 26],
+                title: [135, 206, 235],
+                border: [90, 90, 90],
+                today_bg: [70, 40, 60],
+                text_normal: [200, 200, 200],
+                text_sunday: [255, 99, 99],
+                text_saturday: [99, 149, 255],
+                text_today: [255, 182, 193],
+                text_holiday: [255, 99, 99],
+            },
+            Theme::Light => ThemeColors {
+                background_start: [245, 250, 255],    // 위쪽은 거의 흰색
+                background_end: [200, 225, 255],      // 아래쪽은 연한 하늘색
+                title: [70, 130, 180],
+                border: [200, 200, 200],
+                today_bg: [255, 240, 245],
+                text_normal: [60, 60, 60],
+                text_sunday: [220, 50, 50],
+                text_saturday: [50, 100, 220],
+                text_today: [220, 50, 150],
+                text_holiday: [220, 50, 50],
+            },
+        }
+    }
 }
 
 fn draw_text(
@@ -41,40 +93,40 @@ fn draw_text(
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // 1920x1080 검은 배경의 이미지 생성
+fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
+    let colors = theme.colors();
     let mut img = ImageBuffer::new(1920, 1080);
     
-    // 폰트 로드
-    let font_data = include_bytes!("../assets/BinggraeSamanco.otf");
-    let font = Font::try_from_vec(font_data.to_vec())
-        .ok_or("Error loading font")?;
-
-    // 그라데이션 배경 생성
+    // 그라데이션 배경
     for y in 0..1080 {
         let alpha = y as f64 / 1080.0;
-        let r = (28.0 * (1.0 - alpha) + 18.0 * alpha) as u8;
-        let g = (31.0 * (1.0 - alpha) + 18.0 * alpha) as u8;
-        let b = (51.0 * (1.0 - alpha) + 26.0 * alpha) as u8;
+        let r = (colors.background_start[0] as f64 * (1.0 - alpha) + colors.background_end[0] as f64 * alpha) as u8;
+        let g = (colors.background_start[1] as f64 * (1.0 - alpha) + colors.background_end[1] as f64 * alpha) as u8;
+        let b = (colors.background_start[2] as f64 * (1.0 - alpha) + colors.background_end[2] as f64 * alpha) as u8;
         
         for x in 0..1920 {
             img.put_pixel(x, y, Rgb([r, g, b]));
         }
     }
 
+    // 폰트 로드
+    let font_data = include_bytes!("../assets/BinggraeSamanco.otf");
+    let font = Font::try_from_vec(font_data.to_vec())
+        .ok_or("Error loading font")?;
+
     // 배경 생성 후...
     let today = Local::now().date_naive();
     let title = format!("{}년 {:02}월 {:02}일!", today.year(), today.month(), today.day());
-    draw_text(&mut img, &font, &title, 60, 60, 72.0, Rgb([135, 206, 235]));
+    draw_text(&mut img, &font, &title, 60, 60, 72.0, Rgb([colors.title[0], colors.title[1], colors.title[2]]));
 
     // 제목 그린 후...
     let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (i, day) in weekdays.iter().enumerate() {
         let x = 60 + (i as i32 * 258);  // 258은 셀 너비
         let color = match i {
-            0 => Rgb([255, 99, 99]),    // 일요일은 빨간색
-            6 => Rgb([99, 149, 255]),   // 토요일은 파란색
-            _ => Rgb([200, 200, 200]),  // 평일은 회색
+            0 => Rgb([colors.text_sunday[0], colors.text_sunday[1], colors.text_sunday[2]]),    // 일요일은 빨간색
+            6 => Rgb([colors.text_saturday[0], colors.text_saturday[1], colors.text_saturday[2]]),   // 토요일은 파란색
+            _ => Rgb([colors.text_normal[0], colors.text_normal[1], colors.text_normal[2]]),  // 평일은 회색
         };
         draw_text(&mut img, &font, day, x + 15, 150, 36.0, color);
     }
@@ -120,7 +172,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     img.put_pixel(
                         (day_pos_x + x) as u32,
                         (day_pos_y + y) as u32,
-                        Rgb([70, 40, 60])  // 어두운 보라색 배경
+                        Rgb([colors.today_bg[0], colors.today_bg[1], colors.today_bg[2]])  // 어두운 보라색 배경
                     );
                 }
             }
@@ -133,7 +185,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     img.put_pixel(
                         (day_pos_x + x) as u32,
                         (day_pos_y + y) as u32,
-                        Rgb([90, 90, 90])
+                        Rgb([colors.border[0], colors.border[1], colors.border[2]])
                     );
                 }
             }
@@ -141,13 +193,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // 날짜 색상 설정
         let color = if current_date == today {
-            Rgb([255, 182, 193])  // 오늘 날짜는 분홍색
+            Rgb([colors.text_today[0], colors.text_today[1], colors.text_today[2]])  // 오늘 날짜는 분홍색
         } else if current_date.weekday() == Weekday::Sun {
-            Rgb([255, 99, 99])    // 일요일은 빨간색
+            Rgb([colors.text_sunday[0], colors.text_sunday[1], colors.text_sunday[2]])    // 일요일은 빨간색
         } else if current_date.weekday() == Weekday::Sat {
-            Rgb([99, 149, 255])   // 토요일은 파란색
+            Rgb([colors.text_saturday[0], colors.text_saturday[1], colors.text_saturday[2]])   // 토요일은 파란색
         } else {
-            Rgb([200, 200, 200])  // 평일은 회색
+            Rgb([colors.text_normal[0], colors.text_normal[1], colors.text_normal[2]])  // 평일은 회색
         };
 
         // 날짜 그리기
@@ -157,7 +209,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // 공휴일 표시 추가
         if let Some(holiday) = holidays.iter().find(|h| h.date == current_date) {
             draw_text(&mut img, &font, &holiday.name,
-                day_pos_x + 20, day_pos_y + 70, 24.0, Rgb([255, 99, 99]));
+                day_pos_x + 20, day_pos_y + 70, 24.0, Rgb([colors.text_holiday[0], colors.text_holiday[1], colors.text_holiday[2]]));
         }
 
         if (current_date.day() as i32 + first_weekday) % 7 == 0 {
@@ -168,6 +220,22 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // 이미지 저장
     img.save("calendar.png")?;
-    println!("✅ calendar.png 생성 완료!");
+    println!("✅ calendar.png 생성 완료! ({})", Local::now().format("%Y-%m-%d %H:%M:%S"));
     Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    loop {
+        let hour = Local::now().hour();
+        let theme = if hour >= 6 && hour < 18 {
+            Theme::Light  // 오전 6시 ~ 오후 6시는 라이트 모드
+        } else {
+            Theme::Light   // 그 외 시간은 다크 모드
+        };
+
+        if let Err(e) = draw_calendar(theme) {
+            eprintln!("캘린더 업데이트 중 오류 발생: {}", e);
+        }
+        thread::sleep(Duration::from_secs(600));
+    }
 }
