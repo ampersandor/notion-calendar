@@ -96,7 +96,8 @@ fn draw_text(
 fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
     let colors = theme.colors();
     let mut img = ImageBuffer::new(1920, 1080);
-    
+    let kst = FixedOffset::east_opt(9 * 3600).unwrap();
+
     // 그라데이션 배경
     for y in 0..1080 {
         let alpha = y as f64 / 1080.0;
@@ -115,7 +116,7 @@ fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
         .ok_or("Error loading font")?;
 
     // 배경 생성 후...
-    let today = Local::now().date_naive();
+    let today = Local::now().with_timezone(&kst).date_naive();
     let title = format!("{}년 {:02}월 {:02}일!", today.year(), today.month(), today.day());
     draw_text(&mut img, &font, &title, 60, 60, 72.0, Rgb([colors.title[0], colors.title[1], colors.title[2]]));
 
@@ -156,7 +157,7 @@ fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
         NaiveDate::from_ymd_opt(today.year(), today.month() + 1, 1).unwrap()
     }.pred_opt().unwrap();
 
-    let mut current_date = first_day;
+    let mut current_date: NaiveDate = first_day;
     let mut week = 0;
     let first_weekday = first_day.weekday().num_days_from_sunday() as i32;
 
