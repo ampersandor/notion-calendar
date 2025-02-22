@@ -149,7 +149,6 @@ fn draw_calendar(theme: Theme) -> Result<(), Box<dyn Error>> {
     ];
 
     // 요일 그린 후...
-    let today = Local::now().date_naive();
     let first_day = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap();
     let last_day = if today.month() == 12 {
         NaiveDate::from_ymd_opt(today.year() + 1, 1, 1).unwrap()
@@ -242,8 +241,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let now = Local::now().with_timezone(&kst);
         let hour = now.hour();
         
-        let theme = if hour >= 6 && hour < 18 {
-            Theme::Light  // 오전 6시 ~ 오후 6시는 라이트 모드
+        let theme = if hour >= 6 && hour < 23 {
+            Theme::Light  // 오전 6시 ~ 오후 11시는 라이트 모드
         } else {
             Theme::Dark   // 그 외 시간은 다크 모드
         };
